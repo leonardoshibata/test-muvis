@@ -1,0 +1,117 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup}
+library(muvis)
+library(igraph)
+data("NHANES")
+```
+
+
+# Preprocessing the data
+
+```{r, cache=TRUE}
+nhanes_with_outliers <- data_preproc(NHANES, levels = 15, alpha = 0.5)
+nhanes <- data_preproc(NHANES, levels = 15, detect.outliers = TRUE, alpha = 0.5)
+plot_assoc(nhanes_with_outliers, vars = c("LBXVIE", "LBXTC"))
+plot_assoc(nhanes, vars = c("LBXVIE", "LBXTC"))
+```
+
+
+# GGM for continuous data
+
+```{r}
+nhanes$SEQN <- NULL
+nhanes_ggm <- ggm(nhanes, significance = 0.05, rho = 0.15, community = TRUE, methods = c("glasso", "sin"), plot = F)
+grph_clustrs <- clusters(nhanes_ggm$graph)
+new_ggm <- induced.subgraph(nhanes_ggm$graph, V(nhanes_ggm$graph)[which(grph_clustrs$membership == which.max(grph_clustrs$csize))])
+ggm_vis <- graph_vis(new_ggm, plot = T, filetype = "png", filename = "nhanes_ggm")
+ggm_vis
+```
+
+
+
+
+# Causal network for continuous data
+
+```{r}
+nhanes_dgm <- dgm(nhanes, dtype = "gaussian", alpha = 1e-15)
+grph_clustrs <- clusters(nhanes_dgm$graph)
+new_dgm <- induced.subgraph(nhanes_dgm$graph, V(nhanes_dgm$graph)[which(grph_clustrs$membership == which.max(grph_clustrs$csize))])
+dgm_vis <- graph_vis(new_dgm, plot = T, directed = T, filename = "nhanes_dgm", filetype = "png")
+dgm_vis
+```
+
+
+
+
+# Minimal forest for mixed data
+
+```{r}
+## The following line is breaking the R session
+# nhanes_mf <- min_forest(nhanes, stat = "BIC", community = T, plot = F)
+# mf_vis <- graph_vis(nhanes_mf$graph, plot = T, filetype = "png", filename = "nhanes_mf_bic", plot.community = T)
+```
+
+
+
+
+
+
+
+
+
+# Variable-wise KL-divergence
+
+```{r}
+g1 <- which(nhanes$PAD590 == 1)
+g2 <- which(nhanes$PAD590 == 6)
+KL <- VKL(nhanes, group1 = g1, group2 = g2, permute = 1000)
+KL[2:6, ]
+```
+
+
+# Violating Variable-wise Kulback-Leibler Divergence
+
+```{r}
+KL <- VVKL(nhanes[, 75:160], var1 = nhanes$LBXVIE, var2 = nhanes$LBXTC, plot = T, var1.name = "LBXVIE", var2.name = "LBXTC", permute = 100)
+head(KL$kl)
+KL$plot
+```
+
+
+
+
+# Clustering with minimal forest
+
+```{r}
+t_nhanes <- as.data.frame(sapply(as.data.frame(t(nhanes[1:200, ])), function(x) as.numeric(as.character(x))))
+clusters_mf <- min_forest(t_nhanes)
+clusters_vis <- graph_vis(clusters_mf$graph, plot = T, filename = "clusters", filetype = "png")
+clusters_vis
+```
+
+
+```{r}
+communities <- clusters_mf$communities
+communities <- communities[match(c(1:200), as.integer(names(communities)))]
+
+## Using 'umap' method
+ump <- dim_reduce(nhanes[1:200,], method = "umap", annot1 = as.factor(communities), annot1.name = "minimal forest\n communities")
+## Using 'tsne' method
+tsn <- dim_reduce(nhanes[1:200,], method = "tsne", annot1 = as.factor(communities), annot1.name = "minimal forest\n communities")
+
+## Using cowplot to plot with shared legend
+require(cowplot)
+require(ggplot2)
+leg <- get_legend(ump + theme(legend.position = "bottom"))
+plt <- plot_grid(ump + theme(legend.position = "none"), tsn + theme(legend.position = "none"))
+plot_grid(plt, leg, ncol = 1, rel_heights = c(1, .2))
+```
+
+
+
+
+
