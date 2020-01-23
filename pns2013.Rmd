@@ -1,0 +1,66 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r setup}
+library(vroom)
+library(muvis)
+library(igraph)
+```
+
+
+```{r}
+# data <- vroom("data/Banco_Exames_laboratoriais_PNS_2013.csv",
+#              col_types = c(Z001 = "f", Z003 = "f", Z030 = "f", Z051 = "f", F012 = "f"))
+
+data <- vroom("data/Banco_Exames_laboratoriais_PNS_2013.csv")
+```
+
+
+```{r, cache=TRUE}
+# try to determine which variables are categorical
+processed_data <- data_preproc(data, levels = 8, alpha = 0.5)
+
+# remove outliers
+no_outliers <- data_preproc(data, levels = 8, alpha = 0.5, detect.outliers = TRUE)
+```
+
+```{r}
+plot_assoc(no_outliers, vars = c("Z004", "Z005"))
+```
+
+
+
+
+
+# GGM for continuous data
+
+```{r}
+no_outliers$SEQN <- NULL
+no_outliers_ggm <- ggm(no_outliers, significance = 0.05, rho = 0.15, community = TRUE, methods = c("glasso", "sin"), plot = F)
+grph_clustrs <- clusters(no_outliers_ggm$graph)
+new_ggm <- induced.subgraph(no_outliers_ggm$graph, V(no_outliers_ggm$graph)[which(grph_clustrs$membership == which.max(grph_clustrs$csize))])
+ggm_vis <- graph_vis(new_ggm, plot = T, filetype = "png", filename = "nhanes_ggm")
+ggm_vis
+```
+
+
+
+
+
+# Minimal forest for mixed data
+
+```{r}
+# # The following line is breaking the R session
+# nhanes_mf <- min_forest(nhanes, stat = "BIC", community = T, plot = F)
+# mf_vis <- graph_vis(nhanes_mf$graph, plot = T, filetype = "png", filename = "nhanes_mf_bic", plot.community = T)
+
+no_outliers_mf <- min_forest(no_outliers)
+```
+
+
+
+
+
